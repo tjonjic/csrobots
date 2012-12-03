@@ -1,0 +1,9 @@
+This is solely for testing scalability and memory usage and is quite
+of a torture test for everything from the server to the robot to the
+machine.
+
+Run with the -Xmx (max heap size) option as in:
+
+    $ java -Xmx256m ... -board bigboard ...
+
+The above value did it for us.

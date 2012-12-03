@@ -1,0 +1,167 @@
+*** Marvin -- Server e client per CSRobots ***
+
+Autori:
+        Carlo Maria Cuoghi Barbagli, mat. 0000242114
+        Tomislav Jonjic, mat. 0000244130
+
+** Informazioni per compilazione ed esecuzione
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Requisiti per la compilazione/esecuzione:
+- un compilatore "javac" nel PATH corrente
+- j2sdk >= 1.5.0
+- GNU make
+
+* Per compilare:
+- eseguire "make"
+
+* Per ottenere la documentazione sulle classi (in formato javadoc):
+- eseguire "make doc" (il risultato va nella sottodir "doc")
+
+* Per far partire il server:
+- eseguire:
+  java it/unibo/cs/csrobots/Server -board <board> -address <address> -port <port>
+
+  Esempio: "java it/unibo/cs/csrobots/Server -board data/eye.csr"
+  (oppure una mappa a scelta)
+
+* Per far partire il client:
+- eseguire "java it/unibo/cs/csrobots/Player -address <address> -port <port>"
+
+* Inoltre, per meglio visualizzare il comportamento di server e
+  client, e` possibile utilizzare il debugger grafico:
+- dopo aver lanciato il server, eseguire
+  $ java it/unibo/cs/csrobots/Debugger [OPZIONI]
+  seguito dai giocatori.
+  Utilizzando il debugger grafico, bisognera` avanzare ad ogni turno
+  con la combinazione di tasti ^S.
+
+Server, client e debugger prendono per default l'indirizzo localhost
+(127.0.0.1) e la porta 7919. E` possibile cambiare questo
+comportamento aggiungendo le opzioni "-address" e "-port"
+
+
+** Informazioni sul funzionamento del software
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Il software si divide in due parti fondamentali: server e
+giocatore. Buona parte delle classi e` condivisa sia dal client che
+dal server.  Per entrambi abbiamo diviso il codice in due classi: una
+astratta (BaseServer o BasePlayer) ed una che ne deriva. La classe
+astratta si occupa di implementare tutto cio` che riguarda il
+protocollo di gioco, mentre la classe concreta implementa la logica
+del gioco vera e propria.
+
+Abbiamo aggiunto una piccola "estensione" al protocollo: il nostro
+server puo` accettare connessioni identificate dalla stringa
+"debugger" oltre che "player". A questo tipo di utenti verranno
+inviati soltanto gli update (non gli verra` percio` assegnato un
+robot, ecc.). Inoltre il server aspettera` dal debugger il comando
+"step" ad ogni turno, per poter frammentare l'esecuzione a fini di
+debug.  Questa piccola estensione ci e` stata utile per per realizzare
+un debbuger grafico per il gioco il meno intrusivo possibile. La parte
+del protocollo che riguarda i giocatori non e' cambiata.
+
+Per ulteriori approfondimenti sulla struttura del codice, rimandiamo
+allo schema delle classi ed alla documentazione javadoc allegata oltre
+che, ovviamente, al sorgente.
+
+
+** Descrizione della strategia utilizzata dal player
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+La strategia adottata dal player e` la seguente: 
+
+- se siamo sulla destinazione di un pacchetto che trasportiamo,
+  scegliamo di fare un drop.
+
+- se siamo su una sorgente e possiamo raccogliere pacchetti (il carico
+  attuale ce lo consente), lo facciamo. Se ci sono pacchetti, ma non
+  possiamo raccoglierli, li spostiamo in una lista di "sorgenti
+  sospese"; ogni volta che ci liberiamo di un pacchetto, controlliamo
+  se una sorgente contenuta in "sorgenti sospese" contiene un
+  pacchetto che ora possiamo raccogliere. Se questo controllo ha esito
+  positivo, rimettiamo la sorgente nella lista delle sorgenti
+  conosciute.
+
+- se abbiamo un target corrente, procediamo verso quel target,
+  scegliendo il cammino meno "pericoloso" (tra quelli piu` brevi)
+
+- altrimenti scegliamo il nostro prossimo target in base alla seguente
+  strategia:
+
+- se siamo troppo carichi (la forza rimanente per raccogliere
+  pacchetti e` bassa), il nostro prossimo obiettivo sara` la
+  destinazione del pacchetto piu` vicino
+
+- altrimenti decidiamo se continuare a raccogliere pacchetti (andare
+  verso alla casa base piu` vicina) o andare verso la destinazione del
+  pacchetto piu` vicino. Questa scelta e` effettuata in base alla
+  distanza relativa della sorgente o destinazione e al carico attuale.
+
+- in mancanza di un target iniziamo a scandire la mappa, cercando di
+  visitare tutte le caselle possibili.
+
+** Algoritmo di ricerca del cammino piu` breve e di valutazione della distanza
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+L'algoritmo consente di ottenere, per un punto del campo di gioco, la
+distanza minima da qualsiasi altro punto.  Questa informazione e`
+ottenuta mediante il "riempimento" di un array bidimensionale di
+interi (della stessa dimensione del campo di gioco) con un
+procedimento a "gradiente". L'idea di questo algoritmo deriva da
+quello usato da uno dei partecipanti dell'ICFP Contest (team OaSys).
+Ovvero, la posizione attuale viene riempita con uno zero, quelle
+adiacenti a distanza uno (le celle a nord, sud, ovest ed est se ci
+sono) con un uno (0+1) e cosi` via. Qualora una cella sia di tipo muro
+o acqua, verra` riempita con un valore maggiore alla massima distanza
+tra due punti.
+ 
+Ogni cella viene visitata una sola volta per decidere che valore
+assegnarle.
+
+Esempio 1:
+
+  .....      43234         o = origine
+  .....      32123         x = caselle "irragiungibili"
+  ..o..  =>  21012
+  .....      32123
+  .....      43234
+
+Esempio 2:
+
+  .....      45654
+  .~~~.      3xxx3
+  ..o..  =>  21012
+  .....      32123
+  .###.      4xxx4
+
+Con questo sistema, accedendo all'array della posizione di cui si
+vuole sapere la distanza da quella corrente, si potra` immediatamente
+leggere il valore cercato. Questo ci consente di scegliere il target
+con una semplice ricerca del minimo in una lista di interi.
+
+Una volta decise qual e` il prossimo target, si usa lo stesso
+algoritmo di sopra prendendo pero' come origine la destinazione
+(target) stessa. Risulta evidente che per trovare il cammino minimo
+bastera` muoversi dalla propria cella ad una con un valore
+immediatamente inferiore e proseguire fino a che non si arriva alla
+cella con valore 0.
+
+Questo procedimento non viene ripetuto necessariamente ad ogni turno
+ma solo quando non si ha un target attuale.
+
+Risulta altresi` evidente che esiste piu` di un cammino della stessa
+distanza per andare da un punto ad un altro. Tra tutti quelli
+possibili, il nostro robot cerca di scegliere quello che contiene il
+minor numero di avversari, basandosi su una semplice ricerca di tutti
+i percorsi minimi possibili, limitando pero` la distanza massima dal
+punto di partenza (per limitare il costo dell'operazione).
+
+L'algoritmo risulta essere scalabile, abbiamo testato il nostro robot
+e server con una mappa 1000x1000 (come consigliato dal team Radical
+Too, secondo classificato all'ICFP 2002) ed ha funzionato senza
+(troppi) problemi di efficienza (a meno di settare la jvm con uno
+spazio heap di 256Mb).
+
+
+- Carlo Cuoghi e Tomislav Jonjic
